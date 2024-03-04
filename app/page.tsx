@@ -1,35 +1,81 @@
 "use client";
 
+import { TodoCard } from "@/components/todo-card";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { resolve } from "path";
+import { useEffect, useState } from "react";
+import { useInView } from "react-intersection-observer";
 
-const posts = [
-  { id: 1, title: "post 1" },
-  { id: 2, title: "post 2" },
-  { id: 3, title: "post 3" },
-  { id: 4, title: "post 4" },
-  { id: 5, title: "post 5" },
-  { id: 6, title: "post 6" },
-  { id: 7, title: "post 7" },
-];
+export interface Todo {
+  id: string;
+  title: string;
+}
 
-const fetchPost = async (page: number) => {
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+const fetchTodos = async (props) => {
+  const res = await fetch(
+    `https://jsonplaceholder.typicode.com/todos?_page=${props.pageParam}`
+  );
 
-  return posts.slice((page - 1) * 2, page * 2);
+  return res.json();
 };
+export default function Home() {
+  const { ref, inView, entry } = useInView({
+    /* Optional options */
+    threshold: 0,
+  });
 
-const Page = () => {
-  const { data, fetchNextPage, isFetchingNextPage } = useInfiniteQuery({
-    queryKey: ["query"],
+  const {
+    data,
+    status,
+    error,
+    fetchNextPage,
+    isFetchingNextPage,
+    hasNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["todos"],
+    queryFn: fetchTodos,
+    initialPageParam: 1,
+    getNextPageParam: (page, allPages) => {
+      console.log(page);
+      const nextPage = page.length ? allPages.length + 1 : undefined;
 
-    queryFn: async ({ pageParams = 1 }) => {
-      const response = await fetchPost(pageParams);
-      return response;
+      console.log(page);
+
+      return nextPage;
+      // return allPages.length + 1;
     },
   });
-};
 
-export default function Home() {
-  return <div></div>;
+  const content = data?.pages.map((todos: Todo[]) =>
+    todos.map((todo, index) => {
+      if (todos.length === index + 1)
+        return <TodoCard innerRef={ref} key={todo.id} todo={todo} />;
+      return <TodoCard key={todo.id} todo={todo} />;
+    })
+  );
+  useEffect(() => {
+    if (inView && hasNextPage) {
+      fetchNextPage();
+    }
+  }, [inView, hasNextPage, fetchNextPage]);
+
+  if (status === "error") return <p>Error</p>;
+  if (status === "pending") return <p>Loading...</p>;
+  return (
+    <div className="app">
+      {content}
+
+      {/* <button
+        ref={ref}
+        disabled={!hasNextPage || isFetchingNextPage}
+        onClick={() => fetchNextPage()}
+        className="text-center flex items-center justify-center border-black p-3 bg-blue-500 rounded-md mb-4"
+      >
+        {isFetchingNextPage
+          ? "Loading..."
+          : hasNextPage
+          ? "Load more"
+          : "Nothing else to load"}
+      </button> */}
+    </div>
+  );
 }
